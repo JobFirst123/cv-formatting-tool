@@ -1,52 +1,53 @@
-from flask import Flask, request, render_template
-import docx
-from fpdf import FPDF
+import io
 import os
+from flask import Flask, request, jsonify
+from werkzeug.utils import secure_filename
+from fpdf import FPDF
+import docx
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = "uploads"
-PROCESSED_FOLDER = "processed"
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-app.config["PROCESSED_FOLDER"] = PROCESSED_FOLDER
+@app.route("/", methods=["GET"])
+def home():
+    return "CV Formatting Tool is Running!", 200
 
-import tempfile
-UPLOAD_FOLDER = tempfile.gettempdir()
-
-@app.route("/", methods=["GET", "POST"])
+@app.route("/upload", methods=["POST"])
 def upload_file():
-    if request.method == "POST":
-        if "file" not in request.files:
-            return "No file part"
-        file = request.files["file"]
-        if file.filename == "":
-            return "No selected file"
-        if file:
-            filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
-            file.save(filepath)
-            processed_filepath = process_cv(filepath)
-            return f"File processed successfully. <a href='/{processed_filepath}'>Download</a>"
-    return '''
-        <!doctype html>
-        <title>Upload CV</title>
-        <h1>Upload a CV to Format</h1>
-        <form action="/" method="post" enctype="multipart/form-data">
-            <input type="file" name="file">
-            <input type="submit" value="Upload">
-        </form>
-    '''
+    if "file" not in request.files:
+        return jsonify({"error": "No file part"}), 400
 
-def process_cv(filepath):
-    doc = docx.Document(filepath)
+    file = request.files["file"]
+
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+
+    # Read file in memory
+    file_stream = io.BytesIO(file.read())
+
+    # Process the CV
+    try:
+        processed_pdf = process_cv(file_stream)
+        return jsonify({"message": "File processed successfully!", "pdf_content": processed_pdf.decode("latin1")}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+def process_cv(file_stream):
+    # Read Word file in memory
+    doc = docx.Document(file_stream)
     formatted_text = "\n".join([para.text for para in doc.paragraphs])
-    output_filepath = os.path.join(app.config["PROCESSED_FOLDER"], "formatted.pdf")
+
+    # Create PDF in memory
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     pdf.multi_cell(200, 10, formatted_text)
-    pdf.output(output_filepath)
-    return output_filepath
+
+    # Save PDF to memory
+    pdf_stream = io.BytesIO()
+    pdf.output(pdf_stream)
+    pdf_stream.seek(0)
+
+    return pdf_stream.getvalue()
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    app.run(debug=True, host="0.0.0.0", port=port)
+    app.run(debug=True)
