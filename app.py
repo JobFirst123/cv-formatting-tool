@@ -10,8 +10,8 @@ PROCESSED_FOLDER = "processed"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["PROCESSED_FOLDER"] = PROCESSED_FOLDER
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(PROCESSED_FOLDER, exist_ok=True)
+import tempfile
+UPLOAD_FOLDER = tempfile.gettempdir()
 
 @app.route("/", methods=["GET", "POST"])
 def upload_file():
