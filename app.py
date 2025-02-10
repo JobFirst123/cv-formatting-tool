@@ -1,24 +1,23 @@
-from flask import Flask, request, send_file, render_template
+from flask import Flask, request, send_file
+import os
 import docx
 from fpdf import FPDF
-import os
 import tempfile
 
 app = Flask(__name__)
 
-# Define temporary upload folder
+# Use a temporary folder for uploads
 UPLOAD_FOLDER = tempfile.gettempdir()
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-
-# Define the processed folder
 PROCESSED_FOLDER = os.path.join(UPLOAD_FOLDER, "processed")
-if not os.path.exists(PROCESSED_FOLDER):
-    os.makedirs(PROCESSED_FOLDER)
+os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
 class CustomPDF(FPDF):
+    """ Custom PDF class with corporate design """
     def header(self):
         """ Custom header with logo and company name """
-        self.image("static/logo.png", 10, 8, 30)  # Adjust logo path & size
+        logo_path = os.path.join(os.path.dirname(__file__), "static/logo.png")
+        if os.path.exists(logo_path):
+            self.image(logo_path, 10, 8, 30)  # Adjust logo path & size
         self.set_font("Arial", "B", 14)
         self.cell(200, 10, "JobFirst AG - CV Formatting", ln=True, align="C")
         self.ln(10)
@@ -31,6 +30,7 @@ class CustomPDF(FPDF):
 
 @app.route("/", methods=["GET", "POST"])
 def upload_file():
+    """ Upload and process the CV file """
     if request.method == "POST":
         if "file" not in request.files:
             return "No file part"
@@ -38,9 +38,11 @@ def upload_file():
         if file.filename == "":
             return "No selected file"
         if file:
-            filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
+            filepath = os.path.join(UPLOAD_FOLDER, file.filename)
             file.save(filepath)
+
             processed_filepath = process_cv(filepath)
+
             return send_file(processed_filepath, as_attachment=True)
 
     return '''
