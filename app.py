@@ -1,8 +1,7 @@
 from flask import Flask, request, render_template, send_file
-import docx
-from fpdf import FPDF
 import os
 import tempfile
+import PyPDF2
 
 app = Flask(__name__)
 
@@ -19,38 +18,42 @@ def upload_file():
         file = request.files["file"]
         if file.filename == "":
             return "No selected file"
-        if file:
+        if file and file.filename.endswith(".pdf"):
             filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
             file.save(filepath)
-            processed_filepath = process_cv(filepath)
+            processed_filepath = process_pdf(filepath)
             return send_file(processed_filepath, as_attachment=True, download_name="formatted.pdf")
+        else:
+            return "Please upload a PDF file."
     
     return '''
     <!doctype html>
     <html>
     <head>
-        <title>Upload CV</title>
+        <title>Upload PDF</title>
     </head>
     <body>
-        <h1>Upload a CV to Format</h1>
+        <h1>Upload a PDF to Format</h1>
         <form action="/" method="post" enctype="multipart/form-data">
-            <input type="file" name="file">
+            <input type="file" name="file" accept="application/pdf">
             <input type="submit" value="Upload">
         </form>
     </body>
     </html>
     '''
 
-def process_cv(filepath):
-    doc = docx.Document(filepath)
-    formatted_text = "\n".join([para.text for para in doc.paragraphs])
+def process_pdf(filepath):
     output_filepath = os.path.join(app.config["PROCESSED_FOLDER"], "formatted.pdf")
     
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.multi_cell(200, 10, formatted_text)
-    pdf.output(output_filepath)
+    with open(filepath, "rb") as pdf_file:
+        reader = PyPDF2.PdfReader(pdf_file)
+        writer = PyPDF2.PdfWriter()
+        
+        for page in reader.pages:
+            writer.add_page(page)
+
+        with open(output_filepath, "wb") as output_pdf:
+            writer.write(output_pdf)
     
     return output_filepath
 
